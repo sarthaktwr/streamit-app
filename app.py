@@ -121,15 +121,15 @@ else:
             df = pd.read_csv(csv_file)
 
             # In this case, since we're mapping individual points, each "path" is just one point
-            df['path'] = df[['longitude_wgs84(deg)', ' latitude_wgs84(deg)']].values.tolist()
+            df['path'] = df[['longitude_wgs84(deg)', 'latitude_wgs84(deg)']].values.tolist()
 
             # Create a single path that connects all the points
             # This assumes that the CSV file is ordered by the flight sequence
-            flight_path = df[['longitude_wgs84(deg)', ' latitude_wgs84(deg)']].values.tolist()
+            flight_path = df[['longitude_wgs84(deg)', 'latitude_wgs84(deg)']].values.tolist()
 
             # Define the initial view state of the map
             view_state = pdk.ViewState(
-                latitude=df[' latitude_wgs84(deg)'].mean(),
+                latitude=df['latitude_wgs84(deg)'].mean(),
                 longitude=df['longitude_wgs84(deg)'].mean(),
                 zoom=11,
                 pitch=50,
@@ -157,10 +157,10 @@ else:
             # Render the deck.gl map in the Streamlit app
             st.pydeck_chart(r)
             # Check if the CSV has the required columns
-            if all(col in df.columns for col in [' latitude_wgs84(deg)', 'longitude_wgs84(deg)', ' elevation_wgs84(m)']):
+            if all(col in df.columns for col in ['latitude_wgs84(deg)', 'longitude_wgs84(deg)', 'elevation_wgs84(m)']):
                 # Loop through the DataFrame to simulate aircraft motion
                 for index, row in df.iterrows():
-                    aircraft_location = (row[' latitude_wgs84(deg)'], row['longitude_wgs84(deg)'], row[' elevation_wgs84(m)'])
+                    aircraft_location = (row['latitude_wgs84(deg)'], row['longitude_wgs84(deg)'], row['elevation_wgs84(m)'])
                     alert = check_aircraft_proximity(ground_unit_location, aircraft_location)
 
                     if alert:
