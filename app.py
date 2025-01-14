@@ -5,10 +5,15 @@ import time
 import pandas as pd
 import pydeck as pdk
 from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 import gspread
 from datetime import datetime
 from shapely.geometry import Point, mapping
 import geopandas as gpd
+import google.oauth2.service_account import Credentials
+import json
+
 # Constants
 PROXIMITY_THRESHOLD = 1000  # in meters
 # Simulated user roles and credentials
@@ -171,25 +176,25 @@ else:
         # Command center interface
         st.title('Command Center Dashboard')
         st.title('Aircraft Proximity Alert System')
-        st.subheader('Upload Google Sheet Credentials')
-        json_file = st.file_uploader("Choose a CSV file", type="json")
+        # st.subheader('Upload Google Sheet Credentials')
+        # json_file = st.file_uploader("Choose a CSV file", type="json")
         scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        if json_file:
-            creds = ServiceAccountCredentials.from_json_keyfile_name(json_file.name, scope)
-            client = gspread.authorize(creds)
-            try:
-                sheet = client.open('Aircraft Proximity Alert System').sheet1
-            except gspread.SpreadsheetNotFound:
-                create_alerts_sheet()
-                sheet = create_alerts_sheet()
+        google_credentials = json.loads(st.secrets['google_credentials']['value'])
+        creds = Credentials.from_authorized_user_info(google_credentials)
+        client = gspread.authorize(creds)
+        try:
+            sheet = client.open('Aircraft Proximity Alert System').sheet1
+        except gspread.SpreadsheetNotFound:
+            create_alerts_sheet()
+            sheet = create_alerts_sheet()
         # Input fields for the ground unit location
         st.subheader('Ground Unit Location')
-        ground_lat = st.number_input('Latitude', value=0.0, format='%f')
-        ground_lon = st.number_input('Longitude', value=0.0, format='%f')
-        ground_elev = st.number_input('Elevation (meters)', value=0.0, format='%f')
-        # ground_lat = 27.623493
-        # ground_lon = 95.368827
-        # ground_elev = 593.793
+        # ground_lat = st.number_input('Latitude', value=0.0, format='%f')
+        # ground_lon = st.number_input('Longitude', value=0.0, format='%f')
+        # ground_elev = st.number_input('Elevation (meters)', value=0.0, format='%f')
+        ground_lat = 27.623493
+        ground_lon = 95.368827
+        ground_elev = 593.793
         ground_unit_location = (ground_lat, ground_lon, ground_elev)
         # File uploader for the aircraft location CSV
         st.subheader('Upload Aircraft Location CSV')
