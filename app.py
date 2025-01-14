@@ -4,9 +4,6 @@ import math
 import time
 import pandas as pd
 import pydeck as pdk
-from oauth2client.service_account import ServiceAccountCredentials
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
 import gspread
 from datetime import datetime
 from shapely.geometry import Point, mapping
