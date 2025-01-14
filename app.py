@@ -140,6 +140,7 @@ def check_for_alerts():
         bool: True if there are alerts, False otherwise.
     """
     sheet = client.open('Aircraft Proximity Alert System').sheet1
+    print('--------------------------------------------', heet)
     alerts = sheet.get_all_records()
     if alert:
         latest_alert = alerts[-1]
