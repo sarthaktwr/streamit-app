@@ -19,6 +19,10 @@ USER_ROLES = {
     'ground_unit': {'username': 'ground', 'password': 'unit123'},
     'aircraft': {'username': 'aircraft', 'password': 'flight123'}
 }
+scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+google_credentials = json.loads(st.secrets['google_credentials']['value'])
+creds = Credentials.from_service_account_info(google_credentials, scopes = scope)
+client = gspread.authorize(creds)
 
 # Initialize session state
 if 'user_role' not in st.session_state:
@@ -135,6 +139,7 @@ def check_for_alerts():
     Returns:
         bool: True if there are alerts, False otherwise.
     """
+    sheet = client.open('Aircraft Proximity Alert System').sheet1
     alerts = sheet.get_all_records()
     if alert:
         latest_alert = alerts[-1]
@@ -175,10 +180,7 @@ else:
         st.title('Aircraft Proximity Alert System')
         # st.subheader('Upload Google Sheet Credentials')
         # json_file = st.file_uploader("Choose a CSV file", type="json")
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        google_credentials = json.loads(st.secrets['google_credentials']['value'])
-        creds = Credentials.from_service_account_info(google_credentials, scopes = scope)
-        client = gspread.authorize(creds)
+        
         try:
             sheet = client.open('Aircraft Proximity Alert System').sheet1
         except gspread.SpreadsheetNotFound:
