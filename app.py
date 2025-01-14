@@ -140,9 +140,8 @@ def check_for_alerts():
         bool: True if there are alerts, False otherwise.
     """
     sheet = client.open('Aircraft Proximity Alert System').sheet1
-    print('--------------------------------------------', sheet)
     alerts = sheet.get_all_records()
-    if alert:
+    if alerts:
         latest_alert = alerts[-1]
         if latest_alert['Alert'] == 'True':
             st.error('Alert: Aircraft is within the proximity threshold!')
