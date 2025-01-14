@@ -11,7 +11,7 @@ import gspread
 from datetime import datetime
 from shapely.geometry import Point, mapping
 import geopandas as gpd
-import google.oauth2.service_account import Credentials
+from google.oauth2.service_account import Credentials
 import json
 
 # Constants
