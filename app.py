@@ -177,7 +177,7 @@ else:
         # json_file = st.file_uploader("Choose a CSV file", type="json")
         scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
         google_credentials = json.loads(st.secrets['google_credentials']['value'])
-        creds = Credentials.from_authorized_user_info(google_credentials)
+        creds = Credentials.from_service_account_info(google_credentials)
         client = gspread.authorize(creds)
         try:
             sheet = client.open('Aircraft Proximity Alert System').sheet1
