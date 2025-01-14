@@ -4,7 +4,11 @@ import math
 import time
 import pandas as pd
 import pydeck as pdk
-
+from oauth2client.service_account import ServiceAccountCredentials
+import gspread
+from datetime import datetime
+from shapely.geometry import Point, mapping
+import geopandas as gpd
 # Constants
 PROXIMITY_THRESHOLD = 1000  # in meters
 # Simulated user roles and credentials
@@ -60,7 +64,57 @@ def check_aircraft_proximity(ground_unit_location, aircraft_location):
     else:
         return False
 
-def send_alert_to_unit(unit_type):
+# Function to animate the aircraft path
+
+def animate_path(df, view_state):
+
+    """
+    Animate the path of the aircraft on the map.
+    Parameters:
+    - df: DataFrame containing the aircraft path data
+    - view_state: pydeck View State object for the map view settings
+    """
+    # Placeholder for the map
+    map_placeholder = st.empty()
+    # Loop through the DataFrame and incrementally add points to the path
+
+    for i in range(1, len(df) + 1):
+        # Create a path layer for the current segment of the flight path
+        path_layer = pdk.Layer(
+            "PathLayer",
+            data=pd.DataFrame({'path': [df[['longitude_wgs84(deg)', 'latitude_wgs84(deg)']].values.tolist()[:i]]}),
+            pickable=True,
+            get_color=[255, 0, 0, 150],  # Red color for the path
+            width_scale=20,
+            width_min_pixels=2,
+            get_path="path",
+            get_width=5,
+        )
+        # Create the deck.gl map for the current segment
+        r = pdk.Deck(
+            layers=[path_layer],
+            initial_view_state=view_state,
+            map_style="mapbox://styles/mapbox/light-v9",
+        )
+        # Update the map in the placeholder
+        map_placeholder.pydeck_chart(r)
+        # Pause for animation effect
+        time.sleep(0.3)
+
+def create_alerts_sheet():
+    """
+    Creates a Google Sheet to store alerts.
+    Returns:
+        gspread.Spreadsheet: The created Google Sheet.
+    """
+    sheet = client.create('Aircraft Proximity Alert System')
+
+    sheet.share('aksh30990@gmail.com', perm_type='user', role='writer')
+
+    worksheet = sheet.sheet1
+
+    worksheet.append_row(['Time', 'Alert', 'Unit Type'])
+def send_alert_to_unit(unit_type, sheet):
     """
     Sends an alert to a specific unit type.
     Args:
@@ -68,9 +122,22 @@ def send_alert_to_unit(unit_type):
     Returns:
         None
     """
-
+    current_time = datetime.utcnow().isoformat()
+    sheet.append_row([current_time, 'True', unit_type])
     st.session_state['alert_sent'] = True
     st.write(f"Alert sent to {unit_type}!")
+
+def check_for_alerts():
+    """
+    Checks if there are any alerts in the Google Sheet.
+    Returns:
+        bool: True if there are alerts, False otherwise.
+    """
+    alerts = sheet.get_all_records()
+    if alert:
+        latest_alert = alerts[-1]
+        if latest_alert['Alert'] == 'True':
+            st.error('Alert: Aircraft is within the proximity threshold!')
 
 def login_user(username, password):
     """
@@ -104,14 +171,26 @@ else:
         # Command center interface
         st.title('Command Center Dashboard')
         st.title('Aircraft Proximity Alert System')
-
+        st.subheader('Upload Google Sheet Credentials')
+        json_file = st.file_uploader("Choose a CSV file", type="json")
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        if json_file:
+            creds = ServiceAccountCredentials.from_json_keyfile_name(json_file.name, scope)
+            client = gspread.authorize(creds)
+            try:
+                sheet = client.open('Aircraft Proximity Alert System').sheet1
+            except gspread.SpreadsheetNotFound:
+                create_alerts_sheet()
+                sheet = create_alerts_sheet()
         # Input fields for the ground unit location
         st.subheader('Ground Unit Location')
         ground_lat = st.number_input('Latitude', value=0.0, format='%f')
-        ground_lon = st.number_input('longitude_wgs84(deg)', value=0.0, format='%f')
+        ground_lon = st.number_input('Longitude', value=0.0, format='%f')
         ground_elev = st.number_input('Elevation (meters)', value=0.0, format='%f')
+        # ground_lat = 27.623493
+        # ground_lon = 95.368827
+        # ground_elev = 593.793
         ground_unit_location = (ground_lat, ground_lon, ground_elev)
-
         # File uploader for the aircraft location CSV
         st.subheader('Upload Aircraft Location CSV')
         csv_file = st.file_uploader("Choose a CSV file", type="csv")
@@ -119,26 +198,18 @@ else:
         if csv_file is not None:
             # Read the CSV file into a DataFrame
             df = pd.read_csv(csv_file)
+                    # Define the initial view state of the map
 
-            # In this case, since we're mapping individual points, each "path" is just one point
-            df['path'] = df[['longitude_wgs84(deg)', 'latitude_wgs84(deg)']].values.tolist()
-
-            # Create a single path that connects all the points
-            # This assumes that the CSV file is ordered by the flight sequence
-            flight_path = df[['longitude_wgs84(deg)', 'latitude_wgs84(deg)']].values.tolist()
-
-            # Define the initial view state of the map
             view_state = pdk.ViewState(
                 latitude=df['latitude_wgs84(deg)'].mean(),
                 longitude=df['longitude_wgs84(deg)'].mean(),
                 zoom=11,
                 pitch=50,
             )
-
-            # Create a path layer for the flight path
+            # Create a path layer for the entire flight path
             path_layer = pdk.Layer(
                 "PathLayer",
-                data=pd.DataFrame({'path': [flight_path]}),  # Wrap the single flight path in a DataFrame
+                data=pd.DataFrame({'path': [df[['longitude_wgs84(deg)', 'latitude_wgs84(deg)']].values.tolist()]}),
                 pickable=True,
                 get_color=[255, 0, 0, 150],  # Red color for the path
                 width_scale=20,
@@ -146,16 +217,57 @@ else:
                 get_path="path",
                 get_width=5,
             )
-
-            # Create the deck.gl map
-            r = pdk.Deck(
-                layers=[path_layer],
-                initial_view_state=view_state,
-                map_style="mapbox://styles/mapbox/light-v9",  # You can choose a different map style
+           # Create scatterplot layers for markers at intervals along the path
+            scatterplot_layers = [
+                pdk.Layer(
+                    "ScatterplotLayer",
+                    data=df.iloc[::10],  # Adjust step size for marker density
+                    get_position='[longitude, latitude]',
+                    get_color='[0, 0, 255, 160]',  # Blue color for markers
+                    get_radius=100,  # Adjust radius for marker size
+                )
+            ]
+            # Mark the ground unit's location with a blue dot
+            ground_unit_layer = pdk.Layer(
+                "ScatterplotLayer",
+                data=pd.DataFrame({
+                    'latitude': [ground_lat],
+                    'longitude': [ground_lon]
+                }),
+                get_position='[longitude, latitude]',
+                get_color='[0, 0, 255, 160]',  # Blue color for the ground unit
+                get_radius=0.0001,  # Adjust radius for marker size
             )
-
+            # Draw a circle around the ground unit's location
+            ground_unit_circle = Point(ground_lon, ground_lat).buffer(0.05)  # 2.5 units radius
+            geojson_circle = mapping(ground_unit_circle)  # Convert to GeoJSON format
+            # Create a GeoJsonLayer for the circle
+            circle_layer = pdk.Layer(
+                "GeoJsonLayer",
+                data=gpd.GeoSeries(ground_unit_circle).__geo_interface__,
+                get_fill_color=[0, 0, 255, 50],  # Translucent blue
+                pickable=True,
+                stroked=False,
+                filled=True,
+                extruded=False,
+            )
+            # Create the deck.gl map with the path, markers, ground unit, and circle
+            r = pdk.Deck(
+                layers=[path_layer] + scatterplot_layers + [ground_unit_layer, circle_layer],
+                initial_view_state=view_state,
+                map_style="mapbox://styles/mapbox/light-v9",
+            )
             # Render the deck.gl map in the Streamlit app
             st.pydeck_chart(r)
+            # # Create the deck.gl map with the path and markers
+            # r = pdk.Deck(
+            #     layers=[path_layer] + scatterplot_layers,
+            #     initial_view_state=view_state,
+            #     map_style="mapbox://styles/mapbox/light-v9",
+            # )
+            # # Render the deck.gl map in the Streamlit app
+            # st.pydeck_chart(r)            
+            # Render the deck.gl map in the Streamlit app
             # Check if the CSV has the required columns
             if all(col in df.columns for col in ['latitude_wgs84(deg)', 'longitude_wgs84(deg)', 'elevation_wgs84(m)']):
                 # Loop through the DataFrame to simulate aircraft motion
@@ -171,10 +283,11 @@ else:
                                             ('Ground Unit', 'Aircraft'),
                                             key=priority_key)
                         # Use the index to create a unique key for the button widget
+                        time.sleep(2)
                         send_alert_key = f'send_alert_button_{index}'
                         if st.button('Send Alert', key=send_alert_key):
                             unit_type = 'ground_unit' if priority == 'Ground Unit' else 'aircraft'
-                            send_alert_to_unit(unit_type)
+                            send_alert_to_unit(unit_type, sheet)
                             st.session_state['alert_sent'] = True
                             time.sleep(2)
                     elif st.session_state['alert_sent']:
@@ -192,14 +305,26 @@ else:
     elif st.session_state['user_role'] == 'ground_unit':
         # Ground unit interface
         st.title('Ground Unit Dashboard')
-        if st.session_state['alert_sent']:
-            st.error('Alert: You are within the proximity threshold of an aircraft!')
+        check_for_alerts()
+        @st.cache(ttl = 30, allow_output_mutation = True, suppress_st_warning = True)
+        def rerun_in_seconds(seconds):
+            time.sleep(seconds)
+            return
+        
+        if rerun_in_seconds(30):
+            st.experimental_rerun()
 
     elif st.session_state['user_role'] == 'aircraft':
         # Aircraft interface
         st.title('Aircraft Dashboard')
-        if st.session_state['alert_sent']:
-            st.error('Alert: You are within the proximity threshold of the ground unit!')
+        check_for_alerts()
+        @st.cache(ttl = 30, allow_output_mutation = True, suppress_st_warning = True)
+        def rerun_in_seconds(seconds):
+            time.sleep(seconds)
+            return
+        
+        if rerun_in_seconds(30):
+            st.experimental_rerun()
 
 # Logout button
 if st.session_state['user_role'] is not None:
