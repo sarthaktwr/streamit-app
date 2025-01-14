@@ -184,14 +184,15 @@ else:
         except gspread.SpreadsheetNotFound:
             create_alerts_sheet()
             sheet = create_alerts_sheet()
+        print(sheet)
         # Input fields for the ground unit location
         st.subheader('Ground Unit Location')
-        # ground_lat = st.number_input('Latitude', value=0.0, format='%f')
-        # ground_lon = st.number_input('Longitude', value=0.0, format='%f')
-        # ground_elev = st.number_input('Elevation (meters)', value=0.0, format='%f')
-        ground_lat = 27.623493
-        ground_lon = 95.368827
-        ground_elev = 593.793
+        ground_lat = st.number_input('Latitude', value=0.0, format='%f')
+        ground_lon = st.number_input('Longitude', value=0.0, format='%f')
+        ground_elev = st.number_input('Elevation (meters)', value=0.0, format='%f')
+        # ground_lat = 27.623493
+        # ground_lon = 95.368827
+        # ground_elev = 593.793
         ground_unit_location = (ground_lat, ground_lon, ground_elev)
         # File uploader for the aircraft location CSV
         st.subheader('Upload Aircraft Location CSV')
