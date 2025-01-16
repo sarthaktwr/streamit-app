@@ -303,7 +303,7 @@ else:
                     alert = check_aircraft_proximity(ground_unit_location, aircraft_location)
                     distance_to_ground = calculate_3d_distance(ground_unit_location, aircraft_location)
 
-                    # Add an alert if the aircraft is within 2.5 km
+                    # Add an alert if the aircraft is within 4.5 km
                     if distance_to_ground <= 4500:
                         ground_unit_alerts.append(
                             f"Aircraft is within firing range of the ground unit. Distance: {distance_to_ground:.2f} meters at timestamp:{datetime.utcnow().isoformat()}"
