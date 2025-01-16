@@ -143,6 +143,7 @@ def check_for_alerts():
     alerts = sheet.get_all_records()
     if alerts:
         latest_alert = alerts[-1]
+        latest_alert['Unit Type'] = 
         if latest_alert['Alert'] == 'True':
             st.error('Alert: Aircraft is within the proximity threshold!')
 
@@ -203,80 +204,73 @@ else:
         if csv_file is not None:
             # Read the CSV file into a DataFrame
             df = pd.read_csv(csv_file)
-                    # Define the initial view state of the map
 
-            view_state = pdk.ViewState(
-                latitude=df['latitude_wgs84(deg)'].mean(),
-                longitude=df['longitude_wgs84(deg)'].mean(),
-                zoom=11,
-                pitch=50,
-            )
-            # Create a path layer for the entire flight path
-            path_layer = pdk.Layer(
-                "PathLayer",
-                data=pd.DataFrame({'path': [df[['longitude_wgs84(deg)', 'latitude_wgs84(deg)']].values.tolist()]}),
-                pickable=True,
-                get_color=[255, 0, 0, 150],  # Red color for the path
-                width_scale=20,
-                width_min_pixels=2,
-                get_path="path",
-                get_width=5,
-            )
-           # Create scatterplot layers for markers at intervals along the path
-            scatterplot_layers = [
-                pdk.Layer(
-                    "ScatterplotLayer",
-                    data=df.iloc[::10],  # Adjust step size for marker density
-                    get_position='[longitude, latitude]',
-                    get_color='[0, 0, 255, 160]',  # Blue color for markers
-                    get_radius=100,  # Adjust radius for marker size
+            # Ensure the required columns are present
+            required_columns = ['latitude_wgs84(deg)', 'longitude_wgs84(deg)', 'elevation_wgs84(m)']
+            if all(col in df.columns for col in required_columns):
+                # Create a new column for the path to match PyDeck's input format
+                df['path'] = df[['longitude_wgs84(deg)', 'latitude_wgs84(deg)']].values.tolist()
+
+                # Define the initial view state of the map
+                view_state = pdk.ViewState(
+                    latitude=df['latitude_wgs84(deg)'].mean(),
+                    longitude=df['longitude_wgs84(deg)'].mean(),
+                    zoom=11,
+                    pitch=50,
                 )
-            ]
-            # Mark the ground unit's location with a blue dot
-            ground_unit_layer = pdk.Layer(
-                "ScatterplotLayer",
-                data=pd.DataFrame({
-                    'latitude': [ground_lat],
-                    'longitude': [ground_lon]
-                }),
-                get_position='[longitude, latitude]',
-                get_color='[0, 0, 255, 160]',  # Blue color for the ground unit
-                get_radius=0.0001,  # Adjust radius for marker size
-            )
-            # Draw a circle around the ground unit's location
-            ground_unit_circle = Point(ground_lon, ground_lat).buffer(0.05)  # 2.5 units radius
-            geojson_circle = mapping(ground_unit_circle)  # Convert to GeoJSON format
-            # Create a GeoJsonLayer for the circle
-            circle_layer = pdk.Layer(
-                "GeoJsonLayer",
-                data=gpd.GeoSeries(ground_unit_circle).__geo_interface__,
-                get_fill_color=[0, 0, 255, 50],  # Translucent blue
-                pickable=True,
-                stroked=False,
-                filled=True,
-                extruded=False,
-            )
-            # Create the deck.gl map with the path, markers, ground unit, and circle
-            r = pdk.Deck(
-                layers=[path_layer] + scatterplot_layers + [ground_unit_layer, circle_layer],
-                initial_view_state=view_state,
-                map_style="mapbox://styles/mapbox/light-v9",
-            )
-            # Render the deck.gl map in the Streamlit app
-            st.pydeck_chart(r)
-            # # Create the deck.gl map with the path and markers
-            # r = pdk.Deck(
-            #     layers=[path_layer] + scatterplot_layers,
-            #     initial_view_state=view_state,
-            #     map_style="mapbox://styles/mapbox/light-v9",
-            # )
-            # # Render the deck.gl map in the Streamlit app
-            # st.pydeck_chart(r)            
-            # Render the deck.gl map in the Streamlit app
-            # Check if the CSV has the required columns
-            if all(col in df.columns for col in ['latitude_wgs84(deg)', 'longitude_wgs84(deg)', 'elevation_wgs84(m)']):
-                # Loop through the DataFrame to simulate aircraft motion
+
+                # Initialize an empty list to accumulate paths for animation
+                animated_path = []
+
+                # Create a placeholder for the map
+                map_placeholder = st.empty()
+
+                # Create a DataFrame for the ground unit
+                ground_unit_df = pd.DataFrame({
+                    'latitude': [ground_unit_location[0]],
+                    'longitude': [ground_unit_location[1]],
+                    'elevation': [ground_unit_location[2]]
+                })
+
+                # Loop through the rows of the DataFrame to animate the flight path
                 for index, row in df.iterrows():
+                    # Append the current point to the animated path
+                    animated_path.append(row['path'])
+
+                    # Create the path layer for the animated path
+                    path_layer = pdk.Layer(
+                        "PathLayer",
+                        data=pd.DataFrame({'path': [animated_path]}),  # Wrap in a DataFrame
+                        pickable=True,
+                        get_color=[255, 0, 0, 150],  # Red color for the path
+                        width_scale=20,
+                        width_min_pixels=2,
+                        get_path="path",
+                        get_width=5,
+                    )
+
+                    # Create the scatterplot layer for the ground unit
+                    scatter_layer = pdk.Layer(
+                        "ScatterplotLayer",
+                        data=ground_unit_df,
+                        get_position=["longitude", "latitude"],
+                        get_fill_color=[0, 0, 255, 200],  # Blue color for the ground unit
+                        get_radius=2500,
+                        pickable=True,
+                    )
+
+                    # Create the deck.gl map with both layers
+                    r = pdk.Deck(
+                        layers=[path_layer, scatter_layer],
+                        initial_view_state=view_state,
+                        map_style="mapbox://styles/mapbox/light-v9",
+                    )
+
+                    # Render the updated map in the same placeholder
+                    map_placeholder.pydeck_chart(r)
+
+                    # Add a delay to create the animation effect
+                    time.sleep(0.000001)
                     aircraft_location = (row['latitude_wgs84(deg)'], row['longitude_wgs84(deg)'], row['elevation_wgs84(m)'])
                     alert = check_aircraft_proximity(ground_unit_location, aircraft_location)
 
