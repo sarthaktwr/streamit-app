@@ -366,8 +366,8 @@ else:
         if system_alerts != None:
             if system_alerts['Unit Type'] == 'ground_unit':
                 st.error('Ground Unit Firing. Reroute the current path.')
-        else:
-            st.error('Clearance to fly.')
+            else:
+                st.error('Clearance to fly.')
         @st.cache(ttl = 30, allow_output_mutation = True, suppress_st_warning = True)
         def rerun_in_seconds(seconds):
             time.sleep(seconds)
