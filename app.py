@@ -12,7 +12,7 @@ from google.oauth2.service_account import Credentials
 import json
 
 # Constants
-PROXIMITY_THRESHOLD = 1000  # in meters
+PROXIMITY_THRESHOLD = 4500  # in meters
 # Simulated user roles and credentials
 USER_ROLES = {
     'command_center': {'username': 'command', 'password': 'center123'},
@@ -143,9 +143,9 @@ def check_for_alerts():
     alerts = sheet.get_all_records()
     if alerts:
         latest_alert = alerts[-1]
-        latest_alert['Unit Type'] = 'Ground Unit'
+        # latest_alert['Unit Type'] = 'Ground Unit'
         if latest_alert['Alert'] == 'True':
-            st.error('Alert: Aircraft is within the proximity threshold!')
+                return latest_alert
 
 def login_user(username, password):
     """
@@ -174,29 +174,24 @@ if st.session_state['user_role'] is None:
         login_user(username, password)
 
 # App functionality based on user role
+
 else:
     if st.session_state['user_role'] == 'command_center':
         # Command center interface
         st.title('Command Center Dashboard')
         st.title('Aircraft Proximity Alert System')
-        # st.subheader('Upload Google Sheet Credentials')
-        # json_file = st.file_uploader("Choose a CSV file", type="json")
-        
         try:
             sheet = client.open('Aircraft Proximity Alert System').sheet1
         except gspread.SpreadsheetNotFound:
             create_alerts_sheet()
             sheet = create_alerts_sheet()
-        print(sheet)
         # Input fields for the ground unit location
         st.subheader('Ground Unit Location')
-        ground_lat = st.number_input('Latitude', value=0.0, format='%f')
-        ground_lon = st.number_input('Longitude', value=0.0, format='%f')
+        ground_lat = st.number_input('Latitude (deg)', value=0.0, format='%f')
+        ground_lon = st.number_input('Longitude (deg)', value=0.0, format='%f')
         ground_elev = st.number_input('Elevation (meters)', value=0.0, format='%f')
-        # ground_lat = 27.623493
-        # ground_lon = 95.368827
-        # ground_elev = 593.793
         ground_unit_location = (ground_lat, ground_lon, ground_elev)
+
         # File uploader for the aircraft location CSV
         st.subheader('Upload Aircraft Location CSV')
         csv_file = st.file_uploader("Choose a CSV file", type="csv")
@@ -229,8 +224,21 @@ else:
                 ground_unit_df = pd.DataFrame({
                     'latitude': [ground_unit_location[0]],
                     'longitude': [ground_unit_location[1]],
-                    'elevation': [ground_unit_location[2]]
+                    'elevation': [ground_unit_location[2]],
                 })
+
+                # Icon layer for the square point
+                icon_data = pd.DataFrame({
+                    'coordinates': [[ground_unit_location[1], ground_unit_location[0]]],
+                })
+
+                # Initialize placeholders for alerts and buttons
+                button_placeholder = st.empty()
+                alert_placeholder = st.empty()
+
+                # Initialize an empty list to store alerts
+                ground_unit_alerts = []
+                aircraft_alerts = []
 
                 # Loop through the rows of the DataFrame to animate the flight path
                 for index, row in df.iterrows():
@@ -249,19 +257,35 @@ else:
                         get_width=5,
                     )
 
-                    # Create the scatterplot layer for the ground unit
+                    # Create the scatterplot layer for the ground unit's circle
                     scatter_layer = pdk.Layer(
                         "ScatterplotLayer",
                         data=ground_unit_df,
                         get_position=["longitude", "latitude"],
-                        get_fill_color=[0, 0, 255, 200],  # Blue color for the ground unit
-                        get_radius=2500,
+                        get_fill_color=[0, 0, 255, 50],  # Light blue color for the circle
+                        get_radius=2500,  # 2.5km radius
                         pickable=True,
                     )
 
-                    # Create the deck.gl map with both layers
+                    # Create the icon layer for the ground unit's square point
+                    icon_layer = pdk.Layer(
+                        "IconLayer",
+                        data=icon_data,
+                        get_icon={
+                            "url": "https://img.icons8.com/windows/32/000000/square-full.png",  # URL for a square icon
+                            "width": 128,
+                            "height": 128,
+                            "anchorY": 128,
+                        },
+                        get_position="coordinates",
+                        get_size=10,  # Size of the square
+                        size_scale=10,
+                        pickable=True,
+                    )
+
+                    # Create the deck.gl map with all layers
                     r = pdk.Deck(
-                        layers=[path_layer, scatter_layer],
+                        layers=[path_layer, scatter_layer, icon_layer],
                         initial_view_state=view_state,
                         map_style="mapbox://styles/mapbox/light-v9",
                     )
@@ -269,42 +293,64 @@ else:
                     # Render the updated map in the same placeholder
                     map_placeholder.pydeck_chart(r)
 
-                    # Add a delay to create the animation effect
-                    time.sleep(0.000001)
+                    # Calculate proximity for the current aircraft position
+                    aircraft_location = (
+                        row['latitude_wgs84(deg)'],
+                        row['longitude_wgs84(deg)'],
+                        row['elevation_wgs84(m)']
+                    )
                     aircraft_location = (row['latitude_wgs84(deg)'], row['longitude_wgs84(deg)'], row['elevation_wgs84(m)'])
                     alert = check_aircraft_proximity(ground_unit_location, aircraft_location)
+                    distance_to_ground = calculate_3d_distance(ground_unit_location, aircraft_location)
 
-                    if alert:
-                        st.error(f'Alert: Aircraft at index {index} is within the proximity threshold!')
-                        # Use the index to create a unique key for the radio widget
-                        priority_key = f'alert_priority_radio_{index}'
-                        priority = st.radio("Who should receive the alert first?",
-                                            ('Ground Unit', 'Aircraft'),
-                                            key=priority_key)
-                        # Use the index to create a unique key for the button widget
-                        time.sleep(2)
-                        send_alert_key = f'send_alert_button_{index}'
-                        if st.button('Send Alert', key=send_alert_key):
-                            unit_type = 'ground_unit' if priority == 'Ground Unit' else 'aircraft'
-                            send_alert_to_unit(unit_type, sheet)
-                            st.session_state['alert_sent'] = True
-                            time.sleep(2)
-                    elif st.session_state['alert_sent']:
-                    # Alert has been sent, continue to next iteration
-                        continue
+                    # Add an alert if the aircraft is within 2.5 km
+                    if distance_to_ground <= 4500:
+                        ground_unit_alerts.append(
+                            f"Aircraft is within firing range of the ground unit. Distance: {distance_to_ground:.2f} meters at timestamp:{datetime.utcnow().isoformat()}"
+                        )
+                        aircraft_alerts.append(
+                            f"Aircraft at index {index} is near the ground unit. Distance: {distance_to_ground:.2f} meters."
+                        )
+
+                        # Display buttons dynamically
+                        with button_placeholder.container():
+                            col1, col2 = st.columns(2)
+
+                            with col1:
+                                if st.button("Priority to Ground Unit", key=f"ground_unit_{index}"):
+                                    with alert_placeholder.container():
+                                        unit_type = 'ground_unit'
+                                        send_alert_to_unit(unit_type, sheet)
+                                        st.write('Alert Sent to Ground Unit')
+                                        # st.write("### Ground Unit Alerts")
+                                        # for alert in ground_unit_alerts:
+                                        #     st.write(alert)
+
+                            with col2:
+                                if st.button("Priority to Aircraft", key=f"aircraft_{index}"):
+                                    with alert_placeholder.container():
+                                        unit_type = 'aircraft'
+                                        send_alert_to_unit(unit_type, sheet)
+                                        st.write('Alert Sent to Aircraft')                                                                            
+                                        # st.write("### Aircraft Alerts")
+                                        # for alert in aircraft_alerts:
+                                        #     st.write(alert)
+
+                    # Add a delay to create the animation effect
+                    time.sleep(0.1)
+
             else:
                 st.error('CSV file must contain latitude, longitude, and elevation columns.')
-
-        # Button to check proximity
-        if st.button('Check Aircraft Proximity'):
-            alert = check_aircraft_proximity(ground_unit_location, aircraft_location)
-            if alert:
-                st.error('Alert: Aircraft is within the proximity threshold!')
 
     elif st.session_state['user_role'] == 'ground_unit':
         # Ground unit interface
         st.title('Ground Unit Dashboard')
-        check_for_alerts()
+        system_alerts = check_for_alerts()
+        if system_alerts != None:
+            if system_alerts['Unit Type'] == 'ground_unit':
+                st.error('Keep Firing.')
+            else:
+                st.error('Friendly aircraft approaching. Stop Firing !')
         @st.cache(ttl = 30, allow_output_mutation = True, suppress_st_warning = True)
         def rerun_in_seconds(seconds):
             time.sleep(seconds)
@@ -316,7 +362,12 @@ else:
     elif st.session_state['user_role'] == 'aircraft':
         # Aircraft interface
         st.title('Aircraft Dashboard')
-        check_for_alerts()
+        system_alerts = check_for_alerts()
+        if system_alerts != None:
+            if system_alerts['Unit Type'] == 'ground_unit':
+                st.error('Ground Unit Firing. Reroute the current path.')
+        else:
+            st.error('Clearance to fly.')
         @st.cache(ttl = 30, allow_output_mutation = True, suppress_st_warning = True)
         def rerun_in_seconds(seconds):
             time.sleep(seconds)
