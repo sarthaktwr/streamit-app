@@ -143,7 +143,7 @@ def check_for_alerts():
     alerts = sheet.get_all_records()
     if alerts:
         latest_alert = alerts[-1]
-        latest_alert['Unit Type'] = 
+        latest_alert['Unit Type'] = 'Ground Unit'
         if latest_alert['Alert'] == 'True':
             st.error('Alert: Aircraft is within the proximity threshold!')
 
@@ -271,27 +271,27 @@ else:
 
                     # Add a delay to create the animation effect
                     time.sleep(0.000001)
-                    # aircraft_location = (row['latitude_wgs84(deg)'], row['longitude_wgs84(deg)'], row['elevation_wgs84(m)'])
-                    # alert = check_aircraft_proximity(ground_unit_location, aircraft_location)
+                    aircraft_location = (row['latitude_wgs84(deg)'], row['longitude_wgs84(deg)'], row['elevation_wgs84(m)'])
+                    alert = check_aircraft_proximity(ground_unit_location, aircraft_location)
 
-                    # if alert:
-                    #     st.error(f'Alert: Aircraft at index {index} is within the proximity threshold!')
-                    #     # Use the index to create a unique key for the radio widget
-                    #     priority_key = f'alert_priority_radio_{index}'
-                    #     priority = st.radio("Who should receive the alert first?",
-                    #                         ('Ground Unit', 'Aircraft'),
-                    #                         key=priority_key)
-                    #     # Use the index to create a unique key for the button widget
-                    #     time.sleep(2)
-                    #     send_alert_key = f'send_alert_button_{index}'
-                    #     if st.button('Send Alert', key=send_alert_key):
-                    #         unit_type = 'ground_unit' if priority == 'Ground Unit' else 'aircraft'
-                    #         send_alert_to_unit(unit_type, sheet)
-                    #         st.session_state['alert_sent'] = True
-                    #         time.sleep(2)
-                    # elif st.session_state['alert_sent']:
-                    # # Alert has been sent, continue to next iteration
-                    #     continue
+                    if alert:
+                        st.error(f'Alert: Aircraft at index {index} is within the proximity threshold!')
+                        # Use the index to create a unique key for the radio widget
+                        priority_key = f'alert_priority_radio_{index}'
+                        priority = st.radio("Who should receive the alert first?",
+                                            ('Ground Unit', 'Aircraft'),
+                                            key=priority_key)
+                        # Use the index to create a unique key for the button widget
+                        time.sleep(2)
+                        send_alert_key = f'send_alert_button_{index}'
+                        if st.button('Send Alert', key=send_alert_key):
+                            unit_type = 'ground_unit' if priority == 'Ground Unit' else 'aircraft'
+                            send_alert_to_unit(unit_type, sheet)
+                            st.session_state['alert_sent'] = True
+                            time.sleep(2)
+                    elif st.session_state['alert_sent']:
+                    # Alert has been sent, continue to next iteration
+                        continue
             else:
                 st.error('CSV file must contain latitude, longitude, and elevation columns.')
 
@@ -310,8 +310,8 @@ else:
             time.sleep(seconds)
             return
         
-        if rerun_in_seconds(30):
-            st.experimental_rerun()
+        # if rerun_in_seconds(30):
+        #     st.experimental_rerun()
 
     elif st.session_state['user_role'] == 'aircraft':
         # Aircraft interface
@@ -322,8 +322,8 @@ else:
             time.sleep(seconds)
             return
         
-        if rerun_in_seconds(30):
-            st.experimental_rerun()
+        # if rerun_in_seconds(30):
+        #     st.experimental_rerun()
 
 # Logout button
 if st.session_state['user_role'] is not None:
